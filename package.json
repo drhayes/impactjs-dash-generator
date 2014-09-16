@@ -1,0 +1,28 @@
+{
+  "name": "impactjs-dash-generator",
+  "version": "0.0.0",
+  "description": "Generate Dash docset sqlite data from ImpactJS HTML documentation.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drhayes/impactjs-dash-generator.git"
+  },
+  "keywords": [
+    "impactjs",
+    "dash"
+  ],
+  "author": "David Hayes <drhayes@gmail.com> (http://drhayes.io/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/drhayes/impactjs-dash-generator/issues"
+  },
+  "homepage": "https://github.com/drhayes/impactjs-dash-generator",
+  "dependencies": {
+    "yargs": "^1.3.1",
+    "htmlparser2": "^3.7.3",
+    "sqlite3": "^2.2.7"
+  }
+}
