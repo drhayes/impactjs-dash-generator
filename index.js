@@ -4,6 +4,7 @@ var fs = require('fs');
 var path = require('path');
 var htmlparser = require('htmlparser2');
 var Q = require('kew');
+var sqlite3 = require('sqlite3');
 
 // Arguments.
 var argv = require('yargs')
@@ -29,6 +30,14 @@ if (!fs.existsSync(sqlPath)) {
   process.exit(1);
 }
 
+// Open the DB.
+var db = new sqlite3.Database(sqlPath, function(err) {
+  if (err) {
+    console.error('Error opening sqlite db: ', err);
+    process.exit(1);
+  }
+});
+
 function readFileContents(filename) {
   var defer = Q.defer();
   fs.readFile(filename, {
@@ -38,7 +47,14 @@ function readFileContents(filename) {
 }
 
 function saveToDb(name, type, filename) {
-  console.log(name, type, filename);
+  var defer = Q.defer();
+  var query = "INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES ('$name', '$type', '$path');";
+  db.exec(query, {
+    name: name,
+    type: type,
+    path: filename
+  }, defer.makeNodeResolver());
+  return defer.promise;
 }
 
 function emitTriple(filename, text, currentId) {
@@ -65,11 +81,13 @@ function emitTriple(filename, text, currentId) {
     result[text] = 'Entry';
   }
 
+  var promises = [];
   for (name in result) {
     if (result.hasOwnProperty(name)) {
-      saveToDb(name, result[name], filename + '#' + currentId);
+      promises.push(saveToDb(name, result[name], filename + '#' + currentId));
     }
   }
+  return Q.all(promises);
 }
 
 function parseContents(filename) {
@@ -91,7 +109,7 @@ function parseContents(filename) {
       },
       ontext: function(text) {
         if (inTagWeCareAbout) {
-          emitTriple(filename, text, currentId);
+          emitTriple(filename, text, currentId).then(defer.resolve);
         }
       },
       onclosetag: function(name) {
@@ -102,7 +120,7 @@ function parseContents(filename) {
         inTagWeCareAbout = false;
       },
       onend: function() {
-        defer.resolve();
+        // defer.resolve();
       }
     });
     parser.write(contents);
@@ -119,8 +137,14 @@ glob(classReferenceGlob, function(err, filenames) {
     process.exit(1);
   }
 
+  var promises = [];
   filenames.forEach(function(filename) {
-    readFileContents(filename)
-      .then(parseContents(path.basename(filename)));
+    promises.push(readFileContents(filename)
+      .then(parseContents(path.basename(filename))));
   });
+  Q.all(promises)
+    .then(function() {
+      console.log('Done!');
+      db.close();
+    });
 });
