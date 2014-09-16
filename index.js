@@ -3,6 +3,7 @@
 var fs = require('fs');
 var path = require('path');
 var htmlparser = require('htmlparser2');
+var Q = require('kew');
 
 // Arguments.
 var argv = require('yargs')
@@ -28,6 +29,52 @@ if (!fs.existsSync(sqlPath)) {
   process.exit(1);
 }
 
+function readFileContents(filename) {
+  var defer = Q.defer();
+  fs.readFile(filename, {
+    encoding: 'utf-8'
+  }, defer.makeNodeResolver());
+  return defer.promise;
+}
+
+function parseContents(filename) {
+  return function(contents) {
+    var defer = Q.defer();
+    var inTagWeCareAbout = false;
+    var parser = new htmlparser.Parser({
+      onopentag: function(name, attrs) {
+        name = name.toLowerCase().trim();
+        if (name[0] !== 'h' || name.length !== 2) {
+          return;
+        }
+        if (!attrs.id) {
+          return;
+        }
+        console.log(filename, 'open', name, attrs);
+        inTagWeCareAbout = true;
+      },
+      ontext: function(text) {
+        if (inTagWeCareAbout) {
+          console.log(filename, text);
+        }
+      },
+      onclosetag: function(name) {
+        name = name.toLowerCase().trim();
+        if (name[0] !== 'h' || name.length !== 2) {
+          return;
+        }
+        console.log(filename, 'close', name);
+        inTagWeCareAbout = false;
+      },
+      onend: function() {
+        defer.resolve();
+      }
+    });
+    parser.write(contents);
+    return defer.promise;
+  };
+}
+
 // Build up list of files we want to scan.
 var glob = require('glob');
 var classReferenceGlob = path.join(docsPath, 'documentation-class-reference-*.html');
@@ -37,8 +84,8 @@ glob(classReferenceGlob, function(err, filenames) {
     process.exit(1);
   }
 
-  console.log('Scanning: ', filenames);
-  files.forEach(function(filename) {
-
+  filenames.forEach(function(filename) {
+    readFileContents(filename)
+      .then(parseContents(path.basename(filename)));
   });
 });
