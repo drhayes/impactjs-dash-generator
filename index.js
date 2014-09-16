@@ -37,10 +37,46 @@ function readFileContents(filename) {
   return defer.promise;
 }
 
+function saveToDb(name, type, filename) {
+  console.log(name, type, filename);
+}
+
+function emitTriple(filename, text, currentId) {
+  // Types come from http://kapeli.com/docsets#supportedentrytypes
+  var isField = /^\.[a-z]/g;
+  var twoFields = /(\.[a-z.]+),\W(\.[a-z.]+)/gi;
+  var hasParens = /[\(|\)]/g;
+  var hasConstant = /^ig\.\w+/g;
+  var result = {};
+  if (text.match(twoFields)) {
+    var matches = text.match(twoFields);
+    matches.forEach(function(match) {
+      result[match] = 'Field';
+    });
+  } else if (text.match(isField) && !text.match(hasParens)) {
+    result[text] = 'Field';
+  } else if (text.match(isField) && text.match(hasParens)) {
+    result[text] = 'Method';
+  } else if (text.indexOf('new ') === 0) {
+    result[text] = 'Constructor';
+  } else if (text.match(hasConstant)) {
+    result[text] = 'Constant';
+  } else {
+    result[text] = 'Entry';
+  }
+
+  for (name in result) {
+    if (result.hasOwnProperty(name)) {
+      saveToDb(name, result[name], filename + '#' + currentId);
+    }
+  }
+}
+
 function parseContents(filename) {
   return function(contents) {
     var defer = Q.defer();
     var inTagWeCareAbout = false;
+    var currentId = null;
     var parser = new htmlparser.Parser({
       onopentag: function(name, attrs) {
         name = name.toLowerCase().trim();
@@ -50,12 +86,12 @@ function parseContents(filename) {
         if (!attrs.id) {
           return;
         }
-        console.log(filename, 'open', name, attrs);
+        currentId = attrs.id;
         inTagWeCareAbout = true;
       },
       ontext: function(text) {
         if (inTagWeCareAbout) {
-          console.log(filename, text);
+          emitTriple(filename, text, currentId);
         }
       },
       onclosetag: function(name) {
@@ -63,7 +99,6 @@ function parseContents(filename) {
         if (name[0] !== 'h' || name.length !== 2) {
           return;
         }
-        console.log(filename, 'close', name);
         inTagWeCareAbout = false;
       },
       onend: function() {
