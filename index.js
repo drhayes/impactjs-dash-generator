@@ -5,6 +5,7 @@ var path = require('path');
 var htmlparser = require('htmlparser2');
 var Q = require('kew');
 var sqlite3 = require('sqlite3');
+sqlite3.verbose();
 
 // Arguments.
 var argv = require('yargs')
@@ -48,12 +49,19 @@ function readFileContents(filename) {
 
 function saveToDb(name, type, filename) {
   var defer = Q.defer();
-  var query = "INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES ('$name', '$type', '$path');";
-  db.exec(query, {
-    name: name,
-    type: type,
-    path: filename
-  }, defer.makeNodeResolver());
+  var query = "INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES ($name, $type, $path);";
+  db.run(query, {
+    $name: name,
+    $type: type,
+    $path: filename
+  }, function(error) {
+    // console.log('save', arguments);
+    if (error) {
+      console.error(error);
+      process.exit(1);
+    }
+    defer.resolve();
+  });
   return defer.promise;
 }
 
@@ -109,7 +117,9 @@ function parseContents(filename) {
       },
       ontext: function(text) {
         if (inTagWeCareAbout) {
-          emitTriple(filename, text, currentId).then(defer.resolve);
+          emitTriple(filename, text, currentId).then(defer.resolve).fail(function() {
+            console.error(arguments);
+          });
         }
       },
       onclosetag: function(name) {
